@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(gh api *)",
+      "WebFetch(domain:github.com)",
+      "Bash(curl -L --progress-bar https://raw.githubusercontent.com/chrisroadmap/cmip7-scenariomip/main/data/emissions/extensions_1750-2500.csv -o '/Users/parkercaswell/Desktop/MSc Carbon Management/MSc_py/data/emissions/extensions_1750-2500.csv')",
+      "Bash(curl -L --progress-bar https://raw.githubusercontent.com/chrisroadmap/cmip7-scenariomip/main/data/forcing/volcanic_solar.csv -o '/Users/parkercaswell/Desktop/MSc Carbon Management/MSc_py/data/forcing/volcanic_solar.csv')",
+      "Bash(curl -L --progress-bar https://raw.githubusercontent.com/chrisroadmap/cmip7-scenariomip/main/data/fair-parameters/species_configs_properties_1.4.1.csv -o '/Users/parkercaswell/Desktop/MSc Carbon Management/MSc_py/data/fair-parameters/species_configs_properties_1.4.1.csv')",
+      "Bash(curl -L --progress-bar https://raw.githubusercontent.com/chrisroadmap/cmip7-scenariomip/main/data/fair-parameters/calibrated_constrained_parameters_1.4.1.csv -o '/Users/parkercaswell/Desktop/MSc Carbon Management/MSc_py/data/fair-parameters/calibrated_constrained_parameters_1.4.1.csv')",
+      "Bash(conda info *)",
+      "Bash(jupyter kernelspec *)",
+      "Bash(pip install *)",
+      "Bash(python3 *)",
+      "Read(//Users/parkercaswell/Library/Jupyter/kernels/gcam/**)",
+      "Read(//opt/anaconda3/share/jupyter/kernels/python3/**)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(jupyter nbconvert *)"
+    ]
+  }
+}
