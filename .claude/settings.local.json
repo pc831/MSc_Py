@@ -16,7 +16,8 @@
       "WebFetch(domain:raw.githubusercontent.com)",
       "Bash(jupyter nbconvert *)",
       "Bash(ssh *)",
-      "Bash(xargs cat)"
+      "Bash(xargs cat)",
+      "Bash(pip show *)"
     ]
   }
 }
