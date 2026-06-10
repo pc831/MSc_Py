@@ -15,7 +15,8 @@
       "Read(//opt/anaconda3/share/jupyter/kernels/python3/**)",
       "WebFetch(domain:raw.githubusercontent.com)",
       "Bash(jupyter nbconvert *)",
-      "Bash(ssh *)"
+      "Bash(ssh *)",
+      "Bash(xargs cat)"
     ]
   }
 }
