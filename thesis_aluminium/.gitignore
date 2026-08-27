@@ -1,0 +1,25 @@
+# OS / tooling
+.DS_Store
+.ipynb_checkpoints/
+__pycache__/
+*.pyc
+
+# Heavy, rebuildable build artifacts.
+# Regenerate with scenarios/build_model_clean.sh then scenarios/run_grid.sh (~30 min).
+scenarios/models/
+scenarios/runs/
+mpp-upstream-reference/
+_archive/
+mpp-bau/logs/
+mpp-bau/**/*.html
+
+# Bulk model data is large and rebuildable from mpp-upstream-reference. Track only the small
+# external source inputs that are hard to re-source.
+*.csv
+*.xlsx
+!inputs/POWER_PATHWAY_FINAL_V4.0_MANUAL.xlsx
+!inputs/WEO2024_AnnexA_Free_Dataset_World.csv
+!mpp_aluminium_net_zero_outputs.xlsx
+
+# Redundant MPP code clone (the pipeline builds from mpp-upstream-reference instead).
+mpp-bau/
