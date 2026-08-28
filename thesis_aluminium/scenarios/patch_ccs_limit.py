@@ -45,32 +45,41 @@ from pathlib import Path
 
 import pandas as pd
 
+import math
+
 MODEL = Path("models") / sys.argv[1]
-WORLD = Path("../inputs/WEO2024_AnnexA_Free_Dataset_World.csv")
+LIMIT = sys.argv[2] if len(sys.argv) > 2 else "low"   # "none" | "low" | "high" deployment pace
 # The unconstrained run, used only to size aluminium's captive fossil fleet
-REFERENCE = Path("runs/LC_MPPgrid_CCS_AnodeLocked/smelter/final")
+REFERENCE = Path(sys.argv[3]) if len(sys.argv) > 3 else Path(
+    "runs/LC_MPPgrid_CCS_AnodeLocked/smelter/final")
 
 YEARS = range(2020, 2051)
 
+# Empirical FGD retrofit pace as the ceiling on how fast captive-power CCS can deploy
+# (van Ewijk & McDowall 2020, Nat Comms). Penetration of the captive fossil fleet follows a
+# logistic from 10% at t0, at one of two observed paces:
+#   low  = global FGD diffusion, 10% -> 90% over 26 years (their global capacity fit)
+#   high = fastest national retrofit, Germany 10% -> 79% in 4 years
+# The same fleet-wide pace is applied to captive coal and gas (FGD does not distinguish fuel).
+FGD_T0 = 2025          # year captive-CCS penetration reaches 10%
+FGD_K = {"low": math.log(81) / 26,                            # 10->90% over 26 yr
+         "high": (math.log(0.79 / 0.21) + math.log(9)) / 4}   # 10->79% over 4 yr
+
 
 def capture_penetration():
-    """Share of world fossil power capacity that is capture-equipped, per fuel and year.
+    """Captive-fleet CCS penetration per fuel and year, from the FGD analogue.
 
-    IEA WEO 2024 Net Zero scenario. Only the World file carries this; the regional file has
-    Advanced economies alone for NZE. Published at 2023, 2030, 2035, 2040 and 2050, so the
-    intervening years are interpolated.
+    Logistic p(t) from 10% at t0=2025 at the pace set by LIMIT; the same curve is applied to
+    captive coal and gas, returned per fuel to keep build_limit() unchanged.
+    LIMIT="none" gives zero penetration (no captive-power CCS at all).
     """
-    weo = pd.read_csv(WORLD)
-    nze = weo[(weo["SCENARIO"].str.contains("Net Zero"))
-              & (weo["FLOW"] == "Electrical capacity")]
-    capacity = nze.pivot_table(index="PRODUCT", columns="YEAR", values="VALUE")
-
-    rates = {}
-    for fuel in ["Coal", "Natural gas"]:
-        with_ccus = capacity.loc[f"{fuel}: with CCUS"]
-        total = capacity.loc[f"{fuel}: unabated"] + with_ccus
-        rates[fuel] = with_ccus / total
-    return pd.DataFrame(rates).reindex(YEARS).interpolate(limit_direction="both")
+    if LIMIT == "none":
+        p = pd.Series({y: 0.0 for y in YEARS})
+        return pd.DataFrame({"Coal": p, "Natural gas": p})
+    k = FGD_K[LIMIT]
+    t_mid = FGD_T0 + math.log(9) / k          # year of 50%, from the 10% anchor at t0
+    p = pd.Series({y: 1.0 / (1.0 + math.exp(-k * (y - t_mid))) for y in YEARS})
+    return pd.DataFrame({"Coal": p, "Natural gas": p})
 
 
 def emission_factors(folder):

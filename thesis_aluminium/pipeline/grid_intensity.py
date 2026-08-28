@@ -1,6 +1,6 @@
 """Gross grid CO2 intensity per IAM, mapped to MPP's regions.
 
-Reads an AR6-format IAMC snapshot (the interim grid stream; AR7/ScenarioMIP VLLO drops in by
+Reads an AR6-format IAMC snapshot (the interim grid stream; AR7/ScenarioMIP VL drops in by
 swapping the file and SCENARIO), computes the gross power-sector CO2 intensity each IAM implies
 per region and year, and maps the R10 regions onto MPP's 16 aluminium regions so the result can
 drive a scope-2 rescale in the model.
@@ -103,7 +103,7 @@ def r10_intensity(df, model):
 def grid_intensity(model, file=AR6_FILE, scenario=SCENARIO):
     """Gross grid intensity in MPP regions for one IAM. Returns DataFrame [year x MPP region].
 
-    Swap AR6 -> AR7/VLLO by passing a new `file` and `scenario`; nothing else changes.
+    Swap AR6 -> AR7/VL by passing a new `file` and `scenario`; nothing else changes.
     """
     df = pd.read_csv(file)
     df = df[df["Model"].notna() & ~df["Model"].astype(str).str.startswith("©")]
