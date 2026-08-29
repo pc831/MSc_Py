@@ -39,59 +39,48 @@ ALUMINA_PER_ALUMINIUM = 1.935
 #   anode     Locked or Unlocked, our six added power-source switches
 ARCHIVE = SCENARIOS_DIR.parent / "_archive" / "scenarios_92switches"
 
-CAPTURE_ORDER = ["noCCS", "limitedCCS", "CCS"]
-CAPTURE_LABELS = {"noCCS": "No CCS", "limitedCCS": "Limited CCS", "CCS": "Unlimited CCS"}
-COLUMN_ORDER = [("MPP", "Locked"), ("SBTi", "Locked"), ("MPP", "Unlocked"), ("SBTi", "Unlocked")]
-COLUMN_LABELS = {("MPP", "Locked"): "MPP grid\ninert anode locked",
-                 ("SBTi", "Locked"): "SBTi grid\ninert anode locked",
-                 ("MPP", "Unlocked"): "MPP grid\ninert anode unlocked",
-                 ("SBTi", "Unlocked"): "SBTi grid\ninert anode unlocked"}
+# The baseline matrix: four IAM grids crossed with four captive-power CCS regimes.
+# Rows of every comparison figure are the CCS regime, columns are the grid.
+GRIDS = ["REMIND", "MESSAGE", "AIM", "WITCH"]
+CCS_ORDER = ["none", "low", "high", "unlimited"]
+CCS_LABELS = {"none": "No CCS", "low": "Low\n(nuclear rate)",
+              "high": "High\n(global FGD)", "unlimited": "Unlimited CCS"}
+GRID_LABELS = {g: f"{g} grid" for g in GRIDS}
 
 # Read out under every comparison figure, so a reader who has not followed the work can
 # understand the axes without asking.
 CAPTION = (
-    "Rows are carbon capture regimes. No CCS is MPP's switch table exactly as shipped, in "
-    "which every route into capture-equipped captive power is missing, so capture is "
-    "unreachable and the run returns zero. Limited CCS uses MPP's full switch table with "
-    "capture held to the rate the world fossil power fleet reaches in IEA WEO 2024 Net Zero, "
-    "41% of coal and 12% of gas capacity by 2050, enforced through MPP's own CO2 storage "
-    "constraint. Unlimited CCS uses the full table with no cap.\n"
-    "Columns pair a grid emissions assumption with a switch table rule. Inert anode locked is "
-    "MPP's table as they wrote it, which lets a smelter change its power source only while it "
-    "still has a carbon anode; once the anode is converted the power source is frozen and the "
-    "plant is stranded on captive coal or gas. Inert anode unlocked adds the six missing "
-    "switches so a converted plant can still move to grid supply, a power purchase agreement "
-    "or a small modular reactor."
+    "Columns are the IAM grid whose power-sector CO2 intensity is imposed on the smelter's "
+    "purchased electricity: REMIND, MESSAGE, AIM and WITCH, spanning the fast-to-slow range of "
+    "1.5C-consistent grid decarbonisation.\n"
+    "Rows are the constraint on captive-power carbon capture. No CCS bars captive-power capture "
+    "entirely. Low caps the annual capture addition at the nuclear-analogue diffusion rate "
+    "(1.45% of the captive fossil fleet per year, Kazlou et al. 2024). High caps it at the "
+    "global flue-gas-desulfurisation rate (10.7% per year, van Ewijk & McDowall 2020). "
+    "Unlimited applies no cap. All four hold demand, budget and the full switch table fixed, so "
+    "only the grid and the capture constraint vary."
 )
 
 RUNS_INDEX = {}
-for _capture in CAPTURE_ORDER:
-    for _grid, _anode in COLUMN_ORDER:
-        _name = f"LC_{_grid}grid_{_capture}_Anode{_anode}"
-        RUNS_INDEX[_name] = {"capture": _capture, "grid": _grid, "anode": _anode,
-                             "base": ARCHIVE if _capture == "noCCS" else RUNS}
-RUNS_INDEX["BAU"] = {"capture": "CCS", "grid": "MPP", "anode": "Locked", "base": RUNS}
+for _grid in GRIDS:
+    for _ccs in CCS_ORDER:
+        _name = f"{_grid}_{_ccs}"
+        RUNS_INDEX[_name] = {"grid": _grid, "ccs": _ccs, "base": RUNS}
 
 
-def run_name(capture, grid, anode):
-    return f"LC_{grid}grid_{capture}_Anode{anode}"
+def run_name(grid, ccs):
+    return f"{grid}_{ccs}"
 
 
-# The headline set: business as usual plus the four limited-capture runs.
-SCENARIOS = ["BAU"] + [run_name("limitedCCS", g, a) for g, a in COLUMN_ORDER]
+# Full matrix, grid-major so a column (one grid) is contiguous.
+SCENARIOS = [run_name(g, c) for g in GRIDS for c in CCS_ORDER]
 
-LABELS = {"BAU": "Business as usual"}
-for _name, _r in RUNS_INDEX.items():
-    if _name != "BAU":
-        LABELS[_name] = (f"{_r['grid']} grid, inert anode {_r['anode'].lower()}")
+LABELS = {_n: f"{_r['grid']} grid, {_r['ccs']} CCS" for _n, _r in RUNS_INDEX.items()}
 
-# One hue per column, so a colour means the same grid and anode choice in every figure
-COLUMN_COLOURS = {("MPP", "Locked"): "#9b2226", ("SBTi", "Locked"): "#b45309",
-                  ("MPP", "Unlocked"): "#003f88", ("SBTi", "Unlocked"): "#386641"}
-COLOURS = {"BAU": "#4a4a4a"}
-for _name, _r in RUNS_INDEX.items():
-    if _name != "BAU":
-        COLOURS[_name] = COLUMN_COLOURS[(_r["grid"], _r["anode"])]
+# One hue per grid, so a colour means the same grid in every figure.
+GRID_COLOURS = {"REMIND": "#9b2226", "MESSAGE": "#b45309",
+                "AIM": "#003f88", "WITCH": "#386641"}
+COLOURS = {_n: GRID_COLOURS[_r["grid"]] for _n, _r in RUNS_INDEX.items()}
 
 PLANTS = {"smelter": "Aluminium smelting", "refinery": "Alumina refining"}
 DATA_FOLDER = {"smelter": "def", "refinery": "def_refineries"}
@@ -124,8 +113,15 @@ def style():
 
 # ---------------------------------------------------------------- loading
 
+# Refining is inert to both levers (no grid exposure, no capture route), so it is identical
+# across the matrix. It is run once and every refinery request resolves to that single run.
+REFINERY_REF = "REFINERY_REF"
+
+
 def interface(scenario, plant):
     """The model's own output table for one run, technology rows only."""
+    if plant == "refinery":
+        scenario = REFINERY_REF
     base = RUNS_INDEX.get(scenario, {}).get("base", RUNS)
     pattern = str(base / scenario / plant / "final" / "interface_outputs_*.csv")
     df = pd.read_csv(glob.glob(pattern)[0])
@@ -156,9 +152,16 @@ def production_by_technology(scenario, plant):
 
 
 def budget(plant):
-    """MPP's annual carbon budget for one plant type, Mt CO2."""
-    path = (MODELS / "model_clean" / "aluminium" / "data" / "lc"
-            / DATA_FOLDER[plant] / "intermediate" / "carbon_budget.csv")
+    """The annual carbon budget the runs were actually solved against, Mt CO2.
+
+    This is the budget saved under inputs_used, not model_clean's shipped MPP budget. For the
+    smelter that is the linear budget written by run_poc.write_linear_budget (base x linear
+    decline from 1.0 in 2020 to 0.05 in 2050); every matrix cell uses the identical smelter
+    budget, so any cell's copy serves. Refining is unpatched, so its budget is MPP's shipped
+    one, read from the single canonical refinery run.
+    """
+    ref = REFINERY_REF if plant == "refinery" else SCENARIOS[0]
+    path = RUNS / ref / plant / "inputs_used" / "carbon_budget.csv"
     series = pd.read_csv(path).set_index("year")["annual_limit"] * 1000
     return series.loc[2020:2050]
 
@@ -243,41 +246,41 @@ def year_axis(ax):
     ax.set_xticks(range(2020, 2051, 10))
 
 
-def capture_grid(figsize=(13.5, 9.0), sharey=True):
-    """The 3 by 4 comparison layout: capture regime down the rows, grid and anode across.
+def capture_grid(figsize=(13.5, 11.0), sharey=True):
+    """The 4 by 4 comparison layout: CCS regime down the rows, IAM grid across the columns.
 
-    Returns (fig, axes) where axes is keyed by (capture, grid, anode). Every comparison figure
-    uses this same layout so a reader learns it once.
+    Returns (fig, axes) where axes is keyed by (ccs, grid). Every comparison figure uses this
+    same layout so a reader learns it once.
     """
-    fig, axes = plt.subplots(len(CAPTURE_ORDER), len(COLUMN_ORDER),
+    fig, axes = plt.subplots(len(CCS_ORDER), len(GRIDS),
                              figsize=figsize, sharex=True, sharey=sharey)
     lookup = {}
-    for row, capture in enumerate(CAPTURE_ORDER):
-        for col, (grid, anode) in enumerate(COLUMN_ORDER):
+    for row, ccs in enumerate(CCS_ORDER):
+        for col, grid in enumerate(GRIDS):
             ax = axes[row, col]
-            lookup[(capture, grid, anode)] = ax
+            lookup[(ccs, grid)] = ax
             ax.set_xlim(2020, 2050)
             ax.set_xticks([2020, 2030, 2040, 2050])
             ax.tick_params(labelsize=10)
             if row == 0:
-                ax.set_title(COLUMN_LABELS[(grid, anode)], fontsize=11, fontweight="bold")
+                ax.set_title(GRID_LABELS[grid], fontsize=11, fontweight="bold")
     return fig, lookup
 
 
 def label_rows(axes, unit):
-    """Row labels outboard in bold, one non-bold unit label inboard of them.
+    """Row labels (CCS regime) outboard in bold, one non-bold unit label inboard of them.
 
     Order independent: it forces a draw first, so it works whether it is called before or
     after tight_layout.
     """
-    fig = axes[(CAPTURE_ORDER[0], *COLUMN_ORDER[0])].figure
+    fig = axes[(CCS_ORDER[0], GRIDS[0])].figure
     fig.canvas.draw()
-    for capture in CAPTURE_ORDER:
-        box = axes[(capture, *COLUMN_ORDER[0])].get_position()
-        fig.text(0.008, (box.y0 + box.y1) / 2, CAPTURE_LABELS[capture], rotation=90,
+    for ccs in CCS_ORDER:
+        box = axes[(ccs, GRIDS[0])].get_position()
+        fig.text(0.008, (box.y0 + box.y1) / 2, CCS_LABELS[ccs], rotation=90,
                  ha="left", va="center", fontsize=12, fontweight="bold")
-    top = axes[(CAPTURE_ORDER[0], *COLUMN_ORDER[0])].get_position()
-    bottom = axes[(CAPTURE_ORDER[-1], *COLUMN_ORDER[0])].get_position()
+    top = axes[(CCS_ORDER[0], GRIDS[0])].get_position()
+    bottom = axes[(CCS_ORDER[-1], GRIDS[0])].get_position()
     fig.text(0.048, (top.y1 + bottom.y0) / 2, unit, rotation=90,
              ha="left", va="center", fontsize=10.5, color="#333333")
 

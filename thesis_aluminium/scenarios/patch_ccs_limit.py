@@ -45,8 +45,6 @@ from pathlib import Path
 
 import pandas as pd
 
-import math
-
 MODEL = Path("models") / sys.argv[1]
 LIMIT = sys.argv[2] if len(sys.argv) > 2 else "low"   # "none" | "low" | "high" deployment pace
 # The unconstrained run, used only to size aluminium's captive fossil fleet
@@ -55,31 +53,26 @@ REFERENCE = Path(sys.argv[3]) if len(sys.argv) > 3 else Path(
 
 YEARS = range(2020, 2051)
 
-# Empirical FGD retrofit pace as the ceiling on how fast captive-power CCS can deploy
-# (van Ewijk & McDowall 2020, Nat Comms). Penetration of the captive fossil fleet follows a
-# logistic from 10% at t0, at one of two observed paces:
-#   low  = global FGD diffusion, 10% -> 90% over 26 years (their global capacity fit)
-#   high = fastest national retrofit, Germany 10% -> 79% in 4 years
-# The same fleet-wide pace is applied to captive coal and gas (FGD does not distinguish fuel).
-FGD_T0 = 2025          # year captive-CCS penetration reaches 10%
-FGD_K = {"low": math.log(81) / 26,                            # 10->90% over 26 yr
-         "high": (math.log(0.79 / 0.21) + math.log(9)) / 4}   # 10->79% over 4 yr
+# Maximum annual capture addition as a share of the captive fossil fleet's capturable CO2 per
+# year, from the maximum feasible technology-diffusion rates in the two papers, normalized to
+# market size as those papers do:
+#   low  = nuclear-analogue growth, 1.45%/yr (Kazlou, Cherp & Jewell 2024) - the slower ceiling
+#   high = global FGD growth, 10.7%/yr (van Ewijk & McDowall 2020) - the faster ceiling
+# The same flat rate applies every year to captive coal and gas, with no saturation.
+# "none" gives a zero rate: no captive-power CCS at all.
+RATES = {"low": 0.0145, "high": 0.107}
 
 
 def capture_penetration():
-    """Captive-fleet CCS penetration per fuel and year, from the FGD analogue.
+    """Flat maximum annual capture addition as a share of the captive fleet, per fuel and year.
 
-    Logistic p(t) from 10% at t0=2025 at the pace set by LIMIT; the same curve is applied to
-    captive coal and gas, returned per fuel to keep build_limit() unchanged.
-    LIMIT="none" gives zero penetration (no captive-power CCS at all).
+    The addition of captured CO2 may not exceed RATES[LIMIT] of the captive fleet's capturable
+    CO2 in any year, available every year with no saturation, applied identically to captive
+    coal and gas. LIMIT="none" gives a zero rate (no captive-power CCS at all).
     """
-    if LIMIT == "none":
-        p = pd.Series({y: 0.0 for y in YEARS})
-        return pd.DataFrame({"Coal": p, "Natural gas": p})
-    k = FGD_K[LIMIT]
-    t_mid = FGD_T0 + math.log(9) / k          # year of 50%, from the 10% anchor at t0
-    p = pd.Series({y: 1.0 / (1.0 + math.exp(-k * (y - t_mid))) for y in YEARS})
-    return pd.DataFrame({"Coal": p, "Natural gas": p})
+    rate = 0.0 if LIMIT == "none" else RATES[LIMIT]
+    flat = pd.Series(rate, index=list(YEARS), dtype=float)
+    return pd.DataFrame({"Coal": flat, "Natural gas": flat})
 
 
 def emission_factors(folder):
@@ -153,9 +146,13 @@ def build_limit():
                 row.technology, row.region, year)
         allowance[year] = total
     stock = pd.Series(allowance)
+    if LIMIT in RATES:
+        # allowance here is already the per-year addition (rate x fleet). write_limit_file
+        # differences whatever it receives, so accumulate first, otherwise a flat flow would be
+        # differenced to zero and the limit would ban capture rather than pace it.
+        stock = stock.cumsum()
     # annual_addition compares the year-on-year increase in captured CO2, so the limit is the
-    # increment of that stock. Kept as increments here; the stock is written alongside for
-    # reference.
+    # increment of that stock.
     return stock
 
 
@@ -167,9 +164,12 @@ def write_limit_file(allowance):
     increment of that stock.
     """
     increment = allowance.diff().fillna(0).clip(lower=0)
+    labels = {"none": "No captive-power CCS",
+              "low": "Nuclear-analogue max growth 1.45%/yr (Kazlou et al. 2024)",
+              "high": "Global FGD max growth 10.7%/yr (van Ewijk & McDowall 2020)"}
     table = pd.DataFrame({
         "product": "All",
-        "scenario": "IEA WEO 2024 NZE world fossil CCS addition rate",
+        "scenario": labels[LIMIT],
         "region": "Global",
         "year": increment.index,
         "unit": "MtCO2",
@@ -178,8 +178,8 @@ def write_limit_file(allowance):
     for folder in ["def", "def_refineries"]:
         path = MODEL / "aluminium" / "data" / "lc" / folder / "intermediate" / "co2_storage_constraint.csv"
         table.to_csv(path, index=False)
-    print(f"  limit written: {allowance.loc[2030]:.0f} Mt in 2030, "
-          f"{allowance.loc[2050]:.0f} Mt in 2050, {allowance.sum():.0f} Mt cumulative")
+    print(f"  limit written: {increment.loc[2030]:.1f} Mt/yr in 2030, "
+          f"{increment.loc[2050]:.1f} Mt/yr in 2050, {increment.sum():.0f} Mt cumulative")
 
 
 def exclude_emissions_constraint_from_pass_test():
@@ -273,9 +273,56 @@ def add_storage_handler():
     print("  brownfield storage handler added, copied from ammonia")
 
 
+def deepcopy_tentative_brownfield_asset():
+    """Make the brownfield tentative switch land on a copy, not the live stack asset.
+
+    aluminium/solver/brownfield.py builds a tentative_stack = deepcopy(new_stack), then calls
+    tentative_stack.update_asset(asset_to_update=asset_to_update) with the LIVE asset from
+    new_stack. update_asset mutates asset_to_update.technology in place (asset.py) and appends
+    it, so the switch is applied to new_stack before any constraint is checked. The constraint
+    then correctly rejects the switch, but the asset is already converted and stays converted.
+    Ammonia and cement pass deepcopy(asset_to_update) here; aluminium does not. Without this the
+    co2_storage cap never binds — capture is built regardless of regime. This is the change that
+    makes the limit actually reduce capture."""
+    path = MODEL / "aluminium" / "solver" / "brownfield.py"
+    text = path.read_text()
+    old = ("        tentative_stack.update_asset(\n"
+           "            year=year,\n"
+           "            asset_to_update=asset_to_update,")
+    new = ("        tentative_stack.update_asset(\n"
+           "            year=year,\n"
+           "            asset_to_update=deepcopy(asset_to_update),")
+    if "asset_to_update=deepcopy(asset_to_update)" in text:
+        print("  brownfield tentative asset already deepcopied")
+        return
+    assert old in text, "brownfield tentative update_asset call not found; file changed"
+    path.write_text(text.replace(old, new))
+    print("  brownfield tentative asset now deepcopied (co2_storage cap can bind)")
+
+
+def keep_storage_constraint_for_ccs():
+    """get_constraints_to_apply strips co2_storage_constraint unless the destination name
+    contains "storage" (ammonia/cement naming). Aluminium names capture "...+CCS", so the
+    cap is stripped from every aluminium capture transition — including greenfield builds via
+    select_asset_for_greenfield. Keep it for "CCS" destinations so the cap applies evenly to
+    greenfield, brownfield and retrofit."""
+    path = MODEL / "mppshared" / "agent_logic" / "agent_logic_functions.py"
+    text = path.read_text()
+    old = 'if not ("storage" in destination_technology):'
+    new = 'if not ("storage" in destination_technology or "CCS" in destination_technology):'
+    if new in text:
+        print("  get_constraints_to_apply already keeps co2_storage for CCS destinations")
+        return
+    assert old in text, "get_constraints_to_apply filter not found; base model changed"
+    path.write_text(text.replace(old, new))
+    print("  get_constraints_to_apply keeps co2_storage_constraint for CCS destinations")
+
+
 print(f"{MODEL}: limiting captive power capture to the IEA NZE world rate")
 populate_captured_column()
 write_limit_file(build_limit())
 wire_up_constraint()
 add_storage_handler()
 exclude_emissions_constraint_from_pass_test()
+keep_storage_constraint_for_ccs()
+deepcopy_tentative_brownfield_asset()

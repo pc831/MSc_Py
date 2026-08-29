@@ -285,6 +285,32 @@ Strong prior that greenfield fossil+CCS to smelt aluminium in the 2040s is not c
 allowing it materially inflates the CCS-claim result. Implementable as a switch-type
 restriction. Decide before the CCS regimes are finalised.
 
+### O4b. [OPEN, verified 2026-08-29] Greenfield capture is not fully rate-limited
+Two model defects were found and fixed to make the captive-power capture cap bind:
+- **The deepcopy fix (the real one).** `aluminium/solver/brownfield.py` built its tentative
+  stack as `deepcopy(new_stack)` but passed the *live* `asset_to_update` to `update_asset`,
+  which mutates the asset in place — so a capture switch was applied to `new_stack` before any
+  constraint check, and the check's later rejection did nothing. Ammonia/cement pass
+  `deepcopy(asset_to_update)`; aluminium did not. This was documented as "patched" but no patch
+  function did it (a manual edit lost from the reproducible path). Now a tracked step
+  (`deepcopy_tentative_brownfield_asset`) in `patch_ccs_limit.py`. This is what makes `none`
+  reach zero captive-power capture and gives the clean `none<low<high<unlimited` ordering.
+- **Change #7 (`keep_storage_constraint_for_ccs`)** keeps `co2_storage_constraint` for `+CCS`
+  destinations in `get_constraints_to_apply` (it was stripped unless the name contained
+  "storage", ammonia naming). On the SBTi machine this is *empirically inert* (greenfield
+  capture unchanged, high 12.0→11.4 Mt). On this machine it has a *small* effect: reverting it
+  raises `REMIND_none` greenfield capture 0.0→0.6 Mt. So it catches the marginal greenfield
+  addition when the allowance is zero, but does **not** rate-limit greenfield under a positive
+  allowance — `REMIND_high` still shows 10.35 Mt greenfield capture with #7 applied.
+- **Open problem:** total power capture is not held to the nuclear/FGD rate through greenfield.
+  The cumulative *totals* still order correctly (none 0 < low < high < unlimited) and `none` is
+  clean, so the matrix result stands, but the greenfield path leaks under positive allowances.
+  Leading hypothesis (from the SBTi agent): the `annual_addition` check compares captured on the
+  tentative stack at `year+1` vs the committed stack at `year`, and a greenfield plant
+  commissioned at `year+1` isn't counted in that lookup, so its addition never registers. Also
+  the `year+1` read at 2050 hits 2051 (no data → 0), a separate final-year leak. Both untested.
+  Ties directly to O4 (retrofit-only would sidestep greenfield capture entirely).
+
 ### O5. Symmetric deployment-rate limits on clean captive (hydro / SMR)?
 If CCS is rate-limited but hydro and SMR can appear instantly, the "less-ambitious grid → more
 hydro/SMR" finding is partly an artefact of unconstrained clean buildout (SMR especially cannot
