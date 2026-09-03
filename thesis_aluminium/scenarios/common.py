@@ -27,60 +27,70 @@ FIG = SCENARIOS_DIR / "figures"
 # Tonnes of alumina per tonne of aluminium, MPP's fixed conversion factor
 ALUMINA_PER_ALUMINIUM = 1.935
 
-# Twelve 1.5C runs plus business as usual. Three things vary.
+# Sixteen runs: four GCAM ambition scenarios (SSP-RCP pairs) crossed with four captive-power CCS
+# regimes. Rows of every comparison figure are the CCS regime, columns are the ambition scenario.
 #
-#   capture   noCCS       MPP's shipped 92-pair switch table. Capture-equipped power is
-#                         unreachable, so every run returns exactly zero. Superseded, archived,
-#                         kept only as evidence. See MODEL_REFERENCE.md section 24.
-#             limitedCCS  MPP's full table, with captive power capture held to the world rate
-#                         in IEA WEO 2024 NZE. The defensible set.
-#             CCS         MPP's full table with no limit at all. The unconstrained reference.
-#   grid      MPP or SBTi power pathway emissions intensity
-#   anode     Locked or Unlocked, our six added power-source switches
+# NAMING CONVENTION (keep consistent across code, runs/, gcam_cache/ and figures):
+#   ambition scenario  code tag  SSP<n>_<forcing>   e.g. SSP1_1p9, SSP2_4p5   (== runs/ folder and
+#                       pipeline/gcam_cache/ key); display "SSP1-1.9"; ordered by forcing ascending
+#                       (1.9 -> 4.5 = most -> least ambitious). These are SSP-RCP pairs, NOT the
+#                       future CMIP7 VL/L scenarios — keep the two label systems separate.
+#   CCS regime          none | low | high | unlimited
+#   cell id             "<ambition>_<ccs>"  e.g. SSP1_1p9_none   (== the runs/ folder name)
+#
+#   capture   none       captive-power carbon capture barred entirely
+#             low        annual capture addition capped at the nuclear-analogue diffusion rate
+#             high       capped at the global flue-gas-desulfurisation rate
+#             unlimited  no cap (the unconstrained reference; also the capture-fleet reference)
 ARCHIVE = SCENARIOS_DIR.parent / "_archive" / "scenarios_92switches"
 
-# The baseline matrix: four IAM grids crossed with four captive-power CCS regimes.
-# Rows of every comparison figure are the CCS regime, columns are the grid.
-GRIDS = ["REMIND", "MESSAGE", "AIM", "WITCH"]
+AMBITION = ["SSP1_1p9", "SSP1_2p6", "SSP2_3p7", "SSP2_4p5"]      # ordered most -> least ambitious
+AMBITION_LABELS = {"SSP1_1p9": "SSP1-1.9", "SSP1_2p6": "SSP1-2.6",
+                   "SSP2_3p7": "SSP2-3.7", "SSP2_4p5": "SSP2-4.5"}
 CCS_ORDER = ["none", "low", "high", "unlimited"]
-CCS_LABELS = {"none": "No CCS", "low": "Low\n(nuclear rate)",
-              "high": "High\n(global FGD)", "unlimited": "Unlimited CCS"}
-GRID_LABELS = {g: f"{g} grid" for g in GRIDS}
+CCS_LABELS = {"none": "No CCS", "low": "Low Limit CCS",
+              "high": "High Limit CCS", "unlimited": "Unlimited CCS"}
 
 # Read out under every comparison figure, so a reader who has not followed the work can
 # understand the axes without asking.
 CAPTION = (
-    "Columns are the IAM grid whose power-sector CO2 intensity is imposed on the smelter's "
-    "purchased electricity: REMIND, MESSAGE, AIM and WITCH, spanning the fast-to-slow range of "
-    "1.5C-consistent grid decarbonisation.\n"
+    "Columns are the GCAM ambition scenario (SSP-RCP pair) supplying the smelter's demand, grid "
+    "intensity and carbon budget: SSP1-1.9, SSP1-2.6, SSP2-3.7 and SSP2-4.5, spanning most- to "
+    "least-ambitious mitigation. (Interim stand-in GCAM runs.)\n"
     "Rows are the constraint on captive-power carbon capture. No CCS bars captive-power capture "
     "entirely. Low caps the annual capture addition at the nuclear-analogue diffusion rate "
     "(1.45% of the captive fossil fleet per year, Kazlou et al. 2024). High caps it at the "
     "global flue-gas-desulfurisation rate (10.7% per year, van Ewijk & McDowall 2020). "
-    "Unlimited applies no cap. All four hold demand, budget and the full switch table fixed, so "
-    "only the grid and the capture constraint vary."
+    "Unlimited applies no cap. Each column holds its own GCAM demand, grid and budget fixed, so "
+    "within a column only the capture constraint varies."
 )
 
 RUNS_INDEX = {}
-for _grid in GRIDS:
+for _amb in AMBITION:
     for _ccs in CCS_ORDER:
-        _name = f"{_grid}_{_ccs}"
-        RUNS_INDEX[_name] = {"grid": _grid, "ccs": _ccs, "base": RUNS}
+        _name = f"{_amb}_{_ccs}"
+        RUNS_INDEX[_name] = {"ambition": _amb, "ccs": _ccs, "base": RUNS}
 
 
-def run_name(grid, ccs):
-    return f"{grid}_{ccs}"
+def run_name(ambition, ccs):
+    return f"{ambition}_{ccs}"
 
 
-# Full matrix, grid-major so a column (one grid) is contiguous.
-SCENARIOS = [run_name(g, c) for g in GRIDS for c in CCS_ORDER]
+# Full matrix, ambition-major so a column (one scenario) is contiguous.
+SCENARIOS = [run_name(a, c) for a in AMBITION for c in CCS_ORDER]
 
-LABELS = {_n: f"{_r['grid']} grid, {_r['ccs']} CCS" for _n, _r in RUNS_INDEX.items()}
+LABELS = {_n: f"{AMBITION_LABELS[_r['ambition']]}, {_r['ccs']} CCS" for _n, _r in RUNS_INDEX.items()}
 
-# One hue per grid, so a colour means the same grid in every figure.
-GRID_COLOURS = {"REMIND": "#9b2226", "MESSAGE": "#b45309",
-                "AIM": "#003f88", "WITCH": "#386641"}
-COLOURS = {_n: GRID_COLOURS[_r["grid"]] for _n, _r in RUNS_INDEX.items()}
+# One hue per ambition scenario, so a colour means the same scenario in every figure.
+AMBITION_COLOURS = {"SSP1_1p9": "#9b2226", "SSP1_2p6": "#b45309",
+                    "SSP2_3p7": "#003f88", "SSP2_4p5": "#386641"}
+COLOURS = {_n: AMBITION_COLOURS[_r["ambition"]] for _n, _r in RUNS_INDEX.items()}
+
+# Backward-compatible aliases: the second axis was the IAM grid, it is now the ambition scenario.
+# Existing plot code that iterates GRIDS or keys on GRID_LABELS/GRID_COLOURS keeps working.
+GRIDS = AMBITION
+GRID_LABELS = AMBITION_LABELS
+GRID_COLOURS = AMBITION_COLOURS
 
 PLANTS = {"smelter": "Aluminium smelting", "refinery": "Alumina refining"}
 DATA_FOLDER = {"smelter": "def", "refinery": "def_refineries"}
@@ -151,16 +161,18 @@ def production_by_technology(scenario, plant):
     return pivot.reindex(range(2020, 2051)).fillna(0.0)
 
 
-def budget(plant):
-    """The annual carbon budget the runs were actually solved against, Mt CO2.
+def budget(plant, scenario=None):
+    """The annual carbon budget the run was actually solved against, Mt CO2.
 
-    This is the budget saved under inputs_used, not model_clean's shipped MPP budget. For the
-    smelter that is the linear budget written by run_poc.write_linear_budget (base x linear
-    decline from 1.0 in 2020 to 0.05 in 2050); every matrix cell uses the identical smelter
-    budget, so any cell's copy serves. Refining is unpatched, so its budget is MPP's shipped
-    one, read from the single canonical refinery run.
+    Read from inputs_used (the GCAM budget written by run_gcam_ladder, not model_clean's shipped
+    budget). In the ambition ladder the smelter budget differs by ambition scenario, so pass a
+    cell id of that scenario (any CCS cell serves — the CCS regime does not change the budget).
+    Refining is unpatched, so its budget is MPP's shipped one, from the canonical refinery run.
     """
-    ref = REFINERY_REF if plant == "refinery" else SCENARIOS[0]
+    if plant == "refinery":
+        ref = REFINERY_REF
+    else:
+        ref = scenario or SCENARIOS[0]
     path = RUNS / ref / plant / "inputs_used" / "carbon_budget.csv"
     series = pd.read_csv(path).set_index("year")["annual_limit"] * 1000
     return series.loc[2020:2050]
@@ -247,16 +259,16 @@ def year_axis(ax):
 
 
 def capture_grid(figsize=(13.5, 11.0), sharey=True):
-    """The 4 by 4 comparison layout: CCS regime down the rows, IAM grid across the columns.
+    """The 4 by 4 comparison layout: CCS regime down the rows, ambition scenario across columns.
 
-    Returns (fig, axes) where axes is keyed by (ccs, grid). Every comparison figure uses this
+    Returns (fig, axes) where axes is keyed by (ccs, ambition). Every comparison figure uses this
     same layout so a reader learns it once.
     """
-    fig, axes = plt.subplots(len(CCS_ORDER), len(GRIDS),
+    fig, axes = plt.subplots(len(CCS_ORDER), len(AMBITION),
                              figsize=figsize, sharex=True, sharey=sharey)
     lookup = {}
     for row, ccs in enumerate(CCS_ORDER):
-        for col, grid in enumerate(GRIDS):
+        for col, grid in enumerate(AMBITION):
             ax = axes[row, col]
             lookup[(ccs, grid)] = ax
             ax.set_xlim(2020, 2050)

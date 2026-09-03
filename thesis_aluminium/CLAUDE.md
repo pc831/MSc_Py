@@ -129,6 +129,20 @@ python run.py <scenario> <pathway> <plant> [model_dir]
 `plant` is `smelter` or `refinery`. `model_dir` is a folder name inside `models/` and defaults
 to `model_clean`. Results land in `runs/<scenario>/<plant>/`.
 
+Model env is conda `sbti_alu` (`/opt/anaconda3/envs/sbti_alu/bin/python`); `mppshared` is local.
+
+### Run matrices in PARALLEL — never loop cells sequentially
+
+MPP is **single-threaded** (one core per run) and each smelter cell is only ~2–3 min, so a matrix
+run must **fan cells out across cores, not loop** — otherwise one core sits at ~9% while the machine
+idles. `scenarios/run_gcam_ladder.py` is the reference pattern: a `ThreadPoolExecutor` launches one
+model **subprocess per independent cell** (`--workers`, default cores−1), each on its own model
+clone (`cp -cR`, copy-on-write, near-free on APFS). A 16-cell grid finishes in **well under 10 min**
+vs ~40 sequential. Two stages when CCS-capped cells need each scenario's `unlimited` run as their
+capture reference: run the `unlimited` cells first (parallel), then the capped cells (parallel).
+**Any new matrix reuses this fan-out** — clone-per-cell, patch, run, collect. Never wait on a
+sequential loop again. (`run_poc.py`, the old sequential runner, is superseded for this reason.)
+
 Nine model copies, all gitignored and rebuildable:
 
 - `model_clean` — MPP commit `b09472f` with three run fixes only: sector set to aluminium, a
