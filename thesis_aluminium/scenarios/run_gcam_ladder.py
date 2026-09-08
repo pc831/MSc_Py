@@ -102,11 +102,31 @@ def build_inputs(name, scen):
     return model
 
 
+def strip_power_ccs_switches(model):
+    """`none` regime: delete every switch whose DESTINATION uses a captive-power +CCS source
+    (Coal+CCS / Natural Gas+CCS) from the live switch table, so NO agent — brownfield, greenfield
+    or rebuild — can reach captive-power CCS. Anode CCS (Carbon Anode+CCS) is left alone; `none`
+    bars captive-power CCS only. Closes the O4b rebuild leak without touching model code."""
+    p = model / "aluminium/data/lc/def/intermediate/technology_transitions.csv"
+    df = pd.read_csv(p)
+
+    def power_is_ccs(tech):
+        parts = str(tech).split(" + ", 1)
+        return len(parts) == 2 and parts[1].endswith("+CCS")
+
+    before = len(df)
+    df = df[~df["technology_destination"].map(power_is_ccs)]
+    df.to_csv(p, index=False)
+    print(f"  none: stripped {before - len(df)} captive-power +CCS switch rows from the table")
+
+
 def run_cell(scen, ccs, dry=False):
     name = f"g_{scen}_{ccs}"
     scenario = f"{scen}_{ccs}"
     try:
-        build_inputs(name, scen)
+        model = build_inputs(name, scen)
+        if ccs == "none":
+            strip_power_ccs_switches(model)          # true zero captive-power CCS (O4b fix)
         if ccs != "unlimited":
             reference = f"runs/{scen}_unlimited/smelter/final"
             sh("patch_ccs_limit.py", name, ccs, reference)

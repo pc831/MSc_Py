@@ -156,6 +156,29 @@ route**, so a plant rebuilding in place adopts Coal+CCS regardless of `none`. Sc
 (SSP2-4.5 `none` = 0, doesn't choose it). Fix: block rebuild+greenfield transitions into any `+CCS`
 power tech under `none` (and route them through the penetration cap for `low`/`high`). Closes O4/O4b;
 makes `none` a true no-CCS counterfactual.
+**FIX IMPLEMENTED (simple, no model-code change):** `run_gcam_ladder.strip_power_ccs_switches()`
+deletes every switch row whose DESTINATION power source ends in `+CCS` (Coal+CCS / Natural Gas+CCS)
+from the live `technology_transitions.csv`, for `none` cells only. So no agent (brownfield/
+greenfield/rebuild) can reach captive-power CCS. Anode-only CCS on clean power (e.g. `Carbon
+Anode+CCS + Grid`) is kept — `none` bars captive *power* CCS only. Verified: strips the 6 power-CCS
+destinations incl. the leaked `Carbon Anode + Coal+CCS`. `low`/`high` unchanged (retrofit-capped;
+their greenfield/rebuild leak is a smaller follow-up).
+**DONE & VERIFIED (2026-09-03):** re-ran the 4 `none` cells — **captive-power CCS = 0 in all four**
+(SSP1-2.6 `none` retains 1.21 Mt `Carbon Anode+CCS + PPA+Grid` = anode CCS on clean power, correctly
+kept). Feasibility ~unchanged (SSP1-1.9 `none` gap +0.188 vs +0.18 — leak was tiny, plants switched
+to grid). Notebooks/figures regenerated. Also confirmed the `none`-run hook works (blocked a real
+run until the "execute" keyword was present).
+
+### 16. SSP socioeconomics drive grid cleanliness — a confound in the mixed ladder (2026-09-02)
+User insight, correct: GCAM grid intensity = f(SSP socioeconomics, forcing target). **SSP1**
+(sustainability: cheap renewables, high CCS cost, lower demand) decarbonises the grid fast/cheaply;
+**SSP2** (core costs) is slower for the SAME forcing. So SSP1-1.9's near-zero grid is partly an
+**SSP1 artefact**, giving the smelter an "easy electricity way out"; **SSP2-1.9 (same 1.9 target,
+slower grid) would be a stricter 1.5C test** and likely tips toward the infeasibility we expect.
+The current interim ladder confounds this — the two most-ambitious rungs (SSP1 1.9/2.6) are ALSO the
+cleanest-grid SSP worlds, the two least (SSP2 3.7/4.5) the dirtier. => **strong reason to prioritise
+the single-SSP2 ladder** (run GCAM SSP2-1.9/2.6): it removes the SSP-grid confound AND is the more
+stringent feasibility test.
 
 ### CAVEAT — the interim GCAM runs are stand-ins, not publishable quality (2026-09-02)
 The four GCAM SSP-RCP runs (SSP1-1.9/2.6, SSP2-3.7/4.5) were **hard to get to solve** and are
