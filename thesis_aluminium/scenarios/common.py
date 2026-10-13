@@ -15,6 +15,8 @@ analysis and plotting notebooks, figures/ holds the rendered figures.
 from pathlib import Path
 
 import glob
+import os
+import re
 import matplotlib.pyplot as plt
 import pandas as pd
 
@@ -123,57 +125,91 @@ def style():
 
 # ---------------------------------------------------------------- loading
 
-# Refining is inert to both levers (no grid exposure, no capture route), so it is identical
-# across the matrix. It is run once and every refinery request resolves to that single run.
-REFINERY_REF = "REFINERY_REF"
+# Refining IS grid-exposed once refinery scope-2 electricity fires (see run_refinery_ladder.py and
+# the 2026-09-08 refinery block in IDEA_A_running_context.md — this retracts the earlier "refining
+# is inert to both levers" claim, D11/O7). The CCS regime and (there is no) inert-anode lock still
+# do not touch the refinery, so the only axis that changes it is the grid = the ambition scenario.
+# Per ambition the refinery is solved twice, under the two scope-2 boundaries:
+#   counted  refinery scope-2 = electricity x grid intensity   (SBTi S1+S2 boundary; the default)
+#   free     refinery scope-2 = 0                               (MPP's shipped free boundary)
+# Runs live at runs/<ambition>_refinery_<boundary>/. A matrix cell resolves to its ambition's
+# refinery run; the CCS half of the cell id is ignored for refining.
+REFINERY_BOUNDARIES = ["counted", "free"]
+REFINERY_BOUNDARY_LABELS = {"counted": "Scope-2 counted (S1+S2)", "free": "Scope-2 free (S1 only)"}
+REFINERY_DEFAULT_BOUNDARY = "counted"
 
 
-def interface(scenario, plant):
-    """The model's own output table for one run, technology rows only."""
+def refinery_run(scenario, boundary=REFINERY_DEFAULT_BOUNDARY):
+    """Map a matrix cell (or a bare ambition tag) to its refinery run folder name."""
+    ambition = RUNS_INDEX.get(scenario, {}).get("ambition", scenario)
+    return f"{ambition}_refinery_{boundary}"
+
+
+def pick_output(pattern):
+    """Resolve a glob pattern to the one real output file, ignoring cloud-sync conflict copies.
+
+    iCloud/Dropbox leave stale duplicates named "<file> 2.csv" beside the real "<file>.csv".
+    They are older snapshots — reading one in place of the re-run output silently plots stale
+    numbers (e.g. a No-CCS panel that still shows capture). Prefer the canonical name with no
+    " <n>" suffix; if only conflict copies exist, take the most recently modified."""
+    candidates = glob.glob(pattern)
+    if not candidates:
+        raise FileNotFoundError(pattern)
+    canonical = [p for p in candidates if not re.search(r" \d+\.\w+$", p)]
+    return max(canonical or candidates, key=os.path.getmtime)
+
+
+def interface(scenario, plant, boundary=REFINERY_DEFAULT_BOUNDARY):
+    """The model's own output table for one run, technology rows only.
+
+    For refining, the matrix cell resolves to its ambition's refinery run under the given scope-2
+    boundary (default counted = S1+S2); the smelter reads the cell itself.
+    """
     if plant == "refinery":
-        scenario = REFINERY_REF
+        run = refinery_run(scenario, boundary)
+    else:
+        run = scenario
     base = RUNS_INDEX.get(scenario, {}).get("base", RUNS)
-    pattern = str(base / scenario / plant / "final" / "interface_outputs_*.csv")
-    df = pd.read_csv(glob.glob(pattern)[0])
+    pattern = str(base / run / plant / "final" / "interface_outputs_*.csv")
+    df = pd.read_csv(pick_output(pattern))
     return df[df["technology"] != "All"]
 
 
-def _by_year(scenario, plant, parameter):
-    df = interface(scenario, plant)
+def _by_year(scenario, plant, parameter, boundary=REFINERY_DEFAULT_BOUNDARY):
+    df = interface(scenario, plant, boundary)
     return df[df["parameter"] == parameter].groupby("year")["value"].sum().loc[2020:2050]
 
 
-def emissions(scenario, plant):
-    """Scope 1 plus scope 2 by year, Mt CO2."""
-    return _by_year(scenario, plant, "CO2 Scope1") + _by_year(scenario, plant, "CO2 Scope2")
+def emissions(scenario, plant, boundary=REFINERY_DEFAULT_BOUNDARY):
+    """Scope 1 plus scope 2 by year, Mt CO2. For refining, `boundary` picks counted/free."""
+    return (_by_year(scenario, plant, "CO2 Scope1", boundary)
+            + _by_year(scenario, plant, "CO2 Scope2", boundary))
 
 
-def production(scenario, plant):
+def production(scenario, plant, boundary=REFINERY_DEFAULT_BOUNDARY):
     """Annual production volume by year, Mt of product."""
-    return _by_year(scenario, plant, "Annual production volume")
+    return _by_year(scenario, plant, "Annual production volume", boundary)
 
 
-def production_by_technology(scenario, plant):
+def production_by_technology(scenario, plant, boundary=REFINERY_DEFAULT_BOUNDARY):
     """Annual production volume, years as rows and technologies as columns, Mt."""
-    df = interface(scenario, plant)
+    df = interface(scenario, plant, boundary)
     df = df[df["parameter"] == "Annual production volume"]
     pivot = df.pivot_table(index="year", columns="technology", values="value", aggfunc="sum")
     return pivot.reindex(range(2020, 2051)).fillna(0.0)
 
 
-def budget(plant, scenario=None):
+def budget(plant, scenario=None, boundary=REFINERY_DEFAULT_BOUNDARY):
     """The annual carbon budget the run was actually solved against, Mt CO2.
 
-    Read from inputs_used (the GCAM budget written by run_gcam_ladder, not model_clean's shipped
-    budget). In the ambition ladder the smelter budget differs by ambition scenario, so pass a
-    cell id of that scenario (any CCS cell serves — the CCS regime does not change the budget).
-    Refining is unpatched, so its budget is MPP's shipped one, from the canonical refinery run.
+    Read from inputs_used (the GCAM budget, not model_clean's shipped one). Both plants now differ
+    by ambition scenario, so pass a cell id (any CCS cell serves — CCS does not change the budget).
+    Smelter reads its cell; refining reads its ambition's refinery run (the GCAM refining budget is
+    the same across the counted/free pair, so `boundary` only picks which folder to read it from).
     """
-    if plant == "refinery":
-        ref = REFINERY_REF
-    else:
-        ref = scenario or SCENARIOS[0]
-    path = RUNS / ref / plant / "inputs_used" / "carbon_budget.csv"
+    ref = scenario or SCENARIOS[0]
+    run = refinery_run(ref, boundary) if plant == "refinery" else ref
+    path = RUNS / run / plant / "inputs_used" / "carbon_budget.csv"
     series = pd.read_csv(path).set_index("year")["annual_limit"] * 1000
     return series.loc[2020:2050]
 
@@ -207,18 +243,18 @@ def process_emission_factors():
     return no_captive.groupby("anode")["co2_scope1"].first()
 
 
-def intensity_split(scenario):
+def intensity_split(scenario, boundary=REFINERY_DEFAULT_BOUNDARY):
     """Emissions intensity split into process and electricity, tCO2e per tonne aluminium.
 
-    Process is smelter anode emissions plus all alumina refining emissions, which are
-    entirely process: refinery scope 2 is nonzero in only 26 of 12,524 rows and never exceeds
-    0.024. Electricity is everything else on the smelter side, which is captive fossil
-    generation reported inside scope 1 plus purchased power reported as scope 2.
+    Process is smelter anode emissions plus refinery scope-1 (digestion + calcination fuel).
+    Electricity is smelter captive-fossil generation (reported inside scope 1) plus smelter
+    purchased power (scope 2) plus, once Fix 2 fires, refinery purchased power (refinery scope 2).
+    `boundary` picks the refinery run: counted folds refinery electricity in; free leaves refinery
+    scope 2 at zero, so refinery contributes process only (MPP's shipped boundary).
 
-    Refining is divided by aluminium production rather than alumina production, so it is
-    already on a per tonne of aluminium basis. That works globally because the model holds
-    alumina output at 1.92 to 1.95 times aluminium output, close to its fixed 1.935 factor.
-    No regional attribution rule is involved.
+    Refining is divided by aluminium production rather than alumina production, so it is already on
+    a per tonne of aluminium basis. That works globally because the model holds alumina output at
+    1.92 to 1.95 times aluminium output, close to its fixed 1.935 factor.
     """
     factors = process_emission_factors()
 
@@ -228,11 +264,12 @@ def intensity_split(scenario):
     # Process emissions are production times the anode factor, technology by technology
     smelter_process = sum(smelt[t] * factors[anode(t)] for t in smelt.columns)
     smelter_total = emissions(scenario, "smelter")
-    refinery_total = emissions(scenario, "refinery")
+    refinery_process = _by_year(scenario, "refinery", "CO2 Scope1", boundary)
+    refinery_electricity = _by_year(scenario, "refinery", "CO2 Scope2", boundary)
 
     return pd.DataFrame({
-        "Process": (smelter_process + refinery_total) / aluminium,
-        "Electricity": (smelter_total - smelter_process) / aluminium,
+        "Process": (smelter_process + refinery_process) / aluminium,
+        "Electricity": (smelter_total - smelter_process + refinery_electricity) / aluminium,
     }).assign(Total=lambda d: d["Process"] + d["Electricity"])
 
 

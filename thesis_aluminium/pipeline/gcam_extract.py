@@ -240,6 +240,24 @@ def smelter_budget(scen):
                          "annual_limit": total})
 
 
+def refining_budget(scen):
+    """Refining allowance, Gt CO2/yr, annual: GCAM's own alumina-sector direct CO2 trajectory.
+
+    The refinery is a separate MPP solve, so it carries the refining budget directly (the smelter
+    budget excludes refining, to avoid double count). Taking GCAM's alumina-sector CO2 as the
+    allowance keeps refining on the same GCAM-consistent footing as the smelter, and mirrors how
+    the smelter budget rides GCAM's own smelting electricity emissions. GCAM reports it in MTC
+    (million tonnes carbon); convert to Gt CO2. (D11's alumina-production x MPP-intensity x f(t)
+    construction is the fallback if a bottom-up refining budget is preferred.)
+    """
+    key = SCENARIOS.get(scen, scen)
+    co2 = _run("CO2 emissions by sector (excluding resource production)", key)
+    al = co2[co2["sector"] == "alumina"]
+    mtc = _to_annual(*_group_year(al))                        # MTC/yr, annual
+    gt = (mtc * MTC_TO_MTCO2 / 1000.0).rename("annual_limit")  # Gt CO2/yr
+    return pd.DataFrame({"annual_limit": gt})
+
+
 # ---------------------------------------------------------------- disk cache
 # Extract once, then the runner and later sessions read these CSVs instead of querying BaseX
 # (slow, and needs the GCAM DB present). Committed to the repo.
@@ -253,6 +271,7 @@ def build_cache():
             .to_csv(CACHE / f"{tag}_demand.csv")
         grid_intensity_mpp(tag).rename_axis("year").to_csv(CACHE / f"{tag}_grid.csv")
         smelter_budget(tag).rename_axis("year").to_csv(CACHE / f"{tag}_budget.csv")
+        refining_budget(tag).rename_axis("year").to_csv(CACHE / f"{tag}_refining_budget.csv")
         print(f"cached {tag} -> {CACHE.name}/")
 
 
@@ -266,6 +285,10 @@ def load_grid(tag):
 
 def load_budget(tag):
     return pd.read_csv(CACHE / f"{tag}_budget.csv", index_col="year")
+
+
+def load_refining_budget(tag):
+    return pd.read_csv(CACHE / f"{tag}_refining_budget.csv", index_col="year")
 
 
 # ---------------------------------------------------------------- self-test / summary

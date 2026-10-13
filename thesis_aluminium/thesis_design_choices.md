@@ -212,6 +212,15 @@ budget is built the same way — alumina production × present refining intensit
 Refining is inert to the grid and CCS levers in MPP (identical across the twelve runs), so this
 budget ensures accounting completeness rather than driving results.
 
+> **UPDATE 2026-09-08 — the "refining is inert" clause is RETRACTED.** Refining is inert only
+> because MPP ships refinery scope-2 electricity as zero; once it is populated, refining is
+> grid-exposed (responds to the ambition scenario's grid). The refinery has now been re-run on
+> GCAM demand across the ambition ladder, under two scope-2 boundaries (counted / free), and the
+> refining budget is implemented as `gcam_extract.refining_budget` (GCAM alumina-sector direct CO2)
+> rather than the reconstruction above. See decisions 17–20 in `IDEA_A_running_context.md`, and
+> `scenarios/run_refinery_ladder.py` + `patch_refining_{switches,scope2}.py`. The same retraction
+> applies to **O7** ("refining inert to both levers — verified identical across all twelve runs").
+
 ---
 
 ## Proof-of-concept test runs (set up 2026-08-28, not yet run)

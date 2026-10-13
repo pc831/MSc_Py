@@ -216,3 +216,66 @@ SSP2_4p5_tol15, SSP4_6p0. Key queries: `aluminum production by region`, `CO2 emi
 3. **Run GCAM SSP2-1.9 & SSP2-2.6** for a clean single-SSP axis; re-run those rungs.
 4. O4 / O4b (unchanged from 08-30).
 5. Draft proposal in parallel.
+
+---
+
+## Session decisions & findings — 2026-09-08 (refinery re-run on GCAM demand; plots/04 unblocked)
+
+### 17. RETRACTION — "refining is inert to both levers" (D11/O7) is WRONG; refining is grid-exposed
+The refinery was never grid-exposed only because MPP **ships refinery scope-2 electricity as zero**
+for every electrified technology bar one placeholder (`CST-Fossil-Boiler + Elec-Calciner`, ~0.887).
+Once scope-2 electricity is populated, an electric/MVR boiler's grid emissions become visible and
+refining responds to the grid — i.e. to the ambition scenario in this design. So refining is NOT
+inert; it just had its grid channel shipped empty. This retracts the D11/O7 inertness claim and the
+old plots/04 "one canonical run" framing. (Handoff from a parallel CCS×SSP/RCP agent confirmed the
+same two defects; both are MPP's model, grid-agnostic, so they ported unchanged.)
+
+### 18. Two refinery defects fixed (both grid-agnostic; new scripts written to our conventions)
+- **Fix 1 — stranded fossil-boiler tail** (`scenarios/patch_refining_switches.py`). MPP's refinery
+  switch table routes every unabated fossil boiler to a clean end-state ONLY through a
+  transition-class intermediate; the 2040 moratorium bans that first hop, so a plant still on an
+  initial fossil boiler at 2040 strands (only the two CST end-states are moratorium-proof and they
+  can't carry the load). The refinery twin of the smelter's frozen inert-anode power source
+  (decision 15 / Section 20). Fix: add a DIRECT `brownfield_renovation` from each of the 6 unabated
+  origins `{Coal,Gas,Oil}-Boiler + {Gas,Oil}-Calciner` to each of the 6 real end-states
+  `{Elec,H2,MVR-Fossil}-Boiler + {Elec,H2}-Calciner`, economics templated from the destination's own
+  rows. **VERIFIED pre-fix in our model:** unabated fossil freezes ~160.7 Mt 2030→2045 and refining
+  breaks budget +6.6 (2045) / +11.4 (2050) Mt CO2/yr. Post-fix roughly doubles post-2040 conversion.
+- **Fix 2 — refinery scope-2 electricity** (`scenarios/patch_refining_scope2.py`). (a) reconstruct
+  the 10 `inputs_outputs.csv` electricity rows MPP omits (boiler/calciner cross-combos): electricity
+  is additive, calciner term = `Gas-Boiler + <calciner>`, boiler term = median over present pairs of
+  (value − calciner term), clip ≥0 — verified exact (Coal/Oil-Boiler+Elec = 0.8724, MVR+Gas =
+  0.5842). (b) scope-2 = electricity × grid intensity, grid read off the **smelter** `Inert Anode +
+  Grid` (co2_scope2/electricity) of the SAME copy, so it inherits that copy's GCAM grid — no grid arg.
+  Boundary toggle: counted writes it, free zeroes it. Prereq: `apply_gcam_grid` on the smelter side first.
+
+### 19. Refinery runs: 2×4 (scope-2 boundary × ambition), 8 solves, own GCAM refining budget
+`scenarios/run_refinery_ladder.py` clones per ambition → GCAM grid + alumina demand (GCAM aluminium
+× 1.935 on MPP alumina regional shares) + **GCAM refining budget** + Fix 1 + reconstructed
+electricity, then solves twice (counted / free). Results in `runs/<amb>_refinery_{counted,free}/`.
+CCS does NOT touch refining (confirmed: `strip_power_ccs_switches` edits only the smelter `def/`
+table), so refining is indexed by ambition only. **New pipeline piece:** `gcam_extract.refining_budget`
+= GCAM's own `alumina`-sector direct CO2 (MTC→Gt), cached as `<tag>_refining_budget.csv`.
+
+### 20. FINDING (method-level, on stand-in runs): the scope-2 boundary reshapes TECHNOLOGY, not the TOTAL
+Counting refinery scope-2 barely moves cumulative refining emissions (e.g. SSP2-3.7 counted 4.034 vs
+free 4.024 Gt) because the model **dodges the electricity cost by going hydrogen-led** rather than
+paying for it. So the boundary bites on the digester MIX (counted → H2-led, Electric ≈ 0; free →
+grid-exposed Electric + more MVR), not on the emissions total — the honest way to show it is the
+technology panels, done in plots/04. NB a large unabated-fossil tail persists (~150 Mt/2050, ~67%)
+because GCAM alumina demand (~234 Mt) is ~2× MPP's fleet and the budget pressure is soft — a realism
+caveat (same family as the smelter O5 rate-limit TODO), NOT stranding (Fix 1 confirmed working).
+
+### DONE 2026-09-08 (notebooks + common.py)
+- `common.py`: retired the single `REFINERY_REF` resolution; added `refinery_run(scenario, boundary)`,
+  `REFINERY_BOUNDARIES`/labels, a `boundary=` arg threaded through `interface/emissions/production/
+  production_by_technology/budget`, and `intensity_split(scenario, boundary)` now splits refinery into
+  process (scope-1) and electricity (scope-2). Default boundary = counted (S1+S2).
+- `plots/04_alumina_refining.ipynb`: full rewrite to the 2×4 boundary×ambition matrix (annual
+  emissions vs GCAM refining budget + digester technology). Executed; figures regenerated.
+- `plots/03_emissions_intensity.ipynb`: added a full-boundary (smelter+refining) section showing
+  BOTH boundaries (counted stack vs free total) → `emissions_intensity_full_boundary`. Executed.
+- `analysis/01`: corrected the three stale "refining inert / not re-run" notes (smelter tables unchanged).
+- OLD `runs/REFINERY_REF` (MPP-flat demand) is superseded and no longer referenced; left on disk.
+- STILL PENDING: MODEL_REFERENCE.md Section on refinery inertness (and CLAUDE.md's "Refining has no
+  grid exposure" line) not yet edited — retracted here; update when next touching those docs.
