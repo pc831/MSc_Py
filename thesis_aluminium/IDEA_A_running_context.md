@@ -279,3 +279,21 @@ caveat (same family as the smelter O5 rate-limit TODO), NOT stranding (Fix 1 con
 - OLD `runs/REFINERY_REF` (MPP-flat demand) is superseded and no longer referenced; left on disk.
 - STILL PENDING: MODEL_REFERENCE.md Section on refinery inertness (and CLAUDE.md's "Refining has no
   grid exposure" line) not yet edited — retracted here; update when next touching those docs.
+
+---
+
+## Literature update — 2026-10-13 (OSeMOSYS skill build; full list in `literature/idea_a_related_papers.md`)
+
+### 21. Corrections to decision 13 (verified via Crossref and the PDFs on disk)
+- **Tan et al. 2025 (NCC 15:51–58) is NOT standalone.** Its Methods run five SSP–RCP pathways in **GCAM v6.0**
+  and feed regional electricity cost, generation mix and primary aluminium demand into the smelter-level asset
+  model (249 smelters, 280 captive units). It is the closest precedent to A's design. Remaining distinctions:
+  CCS-regime axis, least-cost switching (MPP agents), single-SSP forcing ladder, asset-resolution-gap metric.
+  **Rejected:** keeping "standalone; we couple to GCAM" as the differentiator.
+- `10.1111/jiec.13600` = Zhang et al. **2024**, China steel scrap (GCAM + dynamic MFA), not a 2025 aluminium soft-link.
+- `10.1021/acs.est.5c15099` = **Ghezzi, Rinaldi et al. 2026**, IAM ↔ hybrid input–output for European steel.
+- Speizer et al. 2023 One Earth 6:1494 = global **steel** sector in GCAM.
+- `Moritz_2024_Model/` = code for **Langhorst et al. 2024, ES&T 58:9624** (Müller group, technology-explicit
+  dynamic stock model of the aluminium cycle) — resolves the "possible mis-attribution" note.
+- New competitors: Xu, Wang et al. 2026 Applied Energy (Al-CRESO, China plant-level CCUS × renewables);
+  Lyu et al. arXiv 2511.22839 (PyPSA-China with smelter module).

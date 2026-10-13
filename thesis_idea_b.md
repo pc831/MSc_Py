@@ -310,3 +310,24 @@ for the coupling — see crosswalk).
   Gidden/IIASA. Verified GCAM crosswalk: Other Industry is a clean residual (no double-count — my
   earlier framing corrected); GCAM Aluminum has no process CCS (captive-power boundary is the one
   real issue); lead with cement + steel.
+
+---
+
+## Literature update — 2026-10-13 (OSeMOSYS skill build; full list in `literature/idea_b_related_papers.md`)
+
+- **Novelty narrowed, still open as a combination.** Simultaneous regional stock + flow limits in an IAM are
+  **taken**: Fuhrman, Lane, McJeon, Iyer, Edwards et al. 2025, *ERL* 20:064034 (doi:10.1088/1748-9326/add9af)
+  — GCAM with regional injection-rate cost curves on the graded cumulative capacity constraint. de Jonge-Anderson
+  et al. 2026 *Commun. Earth Environ.* reports MESSAGE, REMIND and GCAM all added annual injection limits after AR6.
+  **Rejected wording:** "first to impose stock and flow" and "MESSAGEix has essentially no storage constraint".
+  Still open: asset-level sectoral MACCs competing for a prudent regional stock + flow budget, intertemporal
+  scarcity rent read from the duals, and the self-limit-vs-cap verdict.
+- **Pivotal unknown (GCAM caps) partly answered:** Fuhrman 2025 shows how both were imposed in GCAM — read it
+  before the GCAM-staff conversation.
+- Closest competitors: Fuhrman 2025 (top-down stock+flow), Grant et al. 2022 IJGGC (regional practicable
+  storage, sector prioritisation), Tang et al. 2023 iScience (China TIMES → plant-level multi-sector sinks).
+- Corrections: GCAM-CDR v1.0 first author is **Morrow** (GMD 16:1105), not Fuhrman. Gidden data has a newer
+  Zenodo version (record 18343187) — check before use.
+- **Toolset reconsidered:** OSeMOSYS is assessed as a better allocation engine than the bespoke linopy LP (same
+  LP structure; TAC2 = stock cap, AAC2 = flow cap; duals = rents; citable formulation) on three conditions — see
+  `.claude/skills/osemosys/reference/00_tool_choice.md`. Not yet decided; raise with Humphrey.
