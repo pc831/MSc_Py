@@ -190,7 +190,7 @@ specific magnitudes or shapes as findings. Final version swaps in better GCAM sc
 the future CMIP7 VL/L scenarios — keep the two label systems separate.
 
 ### GCAM data access (for reuse)
-DB: `~/gcam/output/database_basexdb`. Query: `~/gcam/.venv/bin/python` + `gcamreader`
+DB: `~/repos/gcam/output/database_basexdb`. Query: `~/repos/gcam/.venv/bin/python` + `gcamreader`
 (`LocalDBConn('output','database_basexdb')`, `parse_batch_query('output/queries/Main_queries.xml')`).
 Scenarios present: Reference, GCAM_SSP1/2/3/4/5, SSP1_1p9, SSP1_2p6, SSP2_3p7, SSP2_4p5_os,
 SSP2_4p5_tol15, SSP4_6p0. Key queries: `aluminum production by region`, `CO2 emissions by sector

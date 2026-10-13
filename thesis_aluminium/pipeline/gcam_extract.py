@@ -28,7 +28,7 @@ import pandas as pd
 # gcamreader is imported lazily inside _db() so the cache loaders (load_demand/grid/budget) work
 # under the model env, which need not have gcamreader or the GCAM DB installed.
 
-GCAM_OUT = Path("/Users/parkercaswell/gcam/output")
+GCAM_OUT = Path("/Users/parkercaswell/repos/gcam/output")
 DB = "database_basexdb"
 QUERIES = GCAM_OUT / "queries" / "Main_queries.xml"
 
